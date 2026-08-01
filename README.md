@@ -70,6 +70,11 @@ brew install allure          # once
 allure serve target/allure-results
 ```
 
+Failures are automatically classified into categories
+(`src/test/resources/categories.json`): **Network / API unavailable**, **Latency
+SLA exceeded**, **Contract violation**, plus the default **Product defects** and
+**Test defects**.
+
 ## Configuration
 
 Defaults live in `src/test/resources/config.properties` and can be overridden without editing it:
@@ -93,6 +98,8 @@ src/test/java/com/simpsons/
                      # errorhandling, contract, security, performance, fuzz
 src/test/resources/
 ├── config.properties
+├── allure.properties
+├── categories.json    # categorías de fallos de Allure
 ├── data/            # external test data in JSON
 ├── schemas/         # JSON Schema contracts
 └── logback-test.xml

@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Network / API unavailable",
+    "matchedStatuses": [
+      "broken",
+      "failed"
+    ],
+    "messageRegex": ".*(timed out|Connection refused|connection reset|no devolvió respuesta HTTP|unable to resolve|UnknownHost|failed to respond|is null).*",
+    "traceRegex": ".*(SocketTimeoutException|ConnectException|NoHttpResponseException|UnknownHostException|SSLHandshakeException|ApiLogFilter).*"
+  },
+  {
+    "name": "Latency SLA exceeded",
+    "matchedStatuses": [
+      "failed"
+    ],
+    "messageRegex": ".*(latencia media|p95).*"
+  },
+  {
+    "name": "Contract violation",
+    "matchedStatuses": [
+      "failed"
+    ],
+    "traceRegex": ".*(io\\.restassured\\.module\\.jsv|JsonSchemaValidator).*"
+  },
+  {
+    "name": "Product defects",
+    "matchedStatuses": [
+      "failed"
+    ]
+  },
+  {
+    "name": "Test defects",
+    "matchedStatuses": [
+      "broken"
+    ]
+  }
+]
