@@ -36,7 +36,7 @@ jobs:
 
   performance:
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -48,6 +48,8 @@ jobs:
 
       # Umbrales más permisivos que el default local: un runner compartido
       # contra una API pública no garantiza la misma latencia que la máquina local.
+      # El job siempre se ejecuta (también en push/PR); si el SLA falla por
+      # latencia del runner, marca warning pero no bloquea el merge.
       - name: Run performance suite
         run: mvn --batch-mode test -Pperformance -Dperformance.latency.avg.ms=10000 -Dperformance.latency.p95.ms=20000
 
