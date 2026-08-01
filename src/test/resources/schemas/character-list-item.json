@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Character list item",
+  "description": "Contrato de cada elemento del array results de GET /characters",
+  "type": "object",
+  "required": ["id", "name", "gender", "portrait_path", "status", "phrases"],
+  "properties": {
+    "id": {"type": "integer", "minimum": 1},
+    "age": {"type": ["integer", "null"], "minimum": 0},
+    "birthdate": {"type": "string"},
+    "gender": {"type": "string", "minLength": 1},
+    "name": {"type": "string", "minLength": 1},
+    "occupation": {"type": "string"},
+    "portrait_path": {"type": "string", "pattern": "^/"},
+    "status": {"type": "string", "minLength": 1},
+    "phrases": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "additionalProperties": false
+}

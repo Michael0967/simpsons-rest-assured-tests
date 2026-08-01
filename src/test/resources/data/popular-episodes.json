@@ -1,0 +1,10 @@
+[
+  {"id": 1, "name": "Simpsons Roasting on an Open Fire", "season": 1},
+  {"id": 2, "name": "Bart the Genius", "season": 1},
+  {"id": 3, "name": "Homer's Odyssey", "season": 1},
+  {"id": 100, "name": "Sweet Seymour Skinner's Baadasssss Song", "season": 5},
+  {"id": 200, "name": "Trash of the Titans", "season": 9},
+  {"id": 500, "name": "At Long Last Leave", "season": 23},
+  {"id": 761, "name": "Frinkenstein's Monster", "season": 35},
+  {"id": 768, "name": "Bart's Brain", "season": 35}
+]

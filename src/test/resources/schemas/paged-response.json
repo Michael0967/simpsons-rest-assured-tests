@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Paged response",
+  "description": "Contrato del envoltorio de paginación (count, next, prev, pages, results)",
+  "type": "object",
+  "required": ["count", "next", "prev", "pages", "results"],
+  "properties": {
+    "count": {"type": "integer", "minimum": 0},
+    "next": {"type": ["string", "null"]},
+    "prev": {"type": ["string", "null"]},
+    "pages": {"type": "integer", "minimum": 0},
+    "results": {"type": "array"}
+  },
+  "additionalProperties": false
+}

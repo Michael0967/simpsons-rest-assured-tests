@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Character detail",
+  "description": "Contrato de GET /characters/{id}",
+  "type": "object",
+  "required": ["id", "name", "gender", "portrait_path", "status", "phrases"],
+  "properties": {
+    "id": {"type": "integer", "minimum": 1},
+    "age": {"type": ["integer", "null"], "minimum": 0},
+    "birthdate": {"type": "string"},
+    "description": {"type": "string"},
+    "gender": {"type": "string", "minLength": 1},
+    "name": {"type": "string", "minLength": 1},
+    "occupation": {"type": "string"},
+    "portrait_path": {"type": "string", "pattern": "^/"},
+    "status": {"type": "string", "minLength": 1},
+    "phrases": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "first_appearance_ep_id": {"type": ["integer", "null"]},
+    "first_appearance_sh_id": {"type": ["integer", "null"]},
+    "first_appearance_ep": {"oneOf": [{"$ref": "#/definitions/episode"}, {"type": "null"}]},
+    "first_appearance_sh": {"oneOf": [{"$ref": "#/definitions/episode"}, {"type": "null"}]}
+  },
+  "definitions": {
+    "episode": {
+      "type": "object",
+      "required": ["id", "name", "season", "episode_number", "airdate"],
+      "properties": {
+        "id": {"type": "integer"},
+        "airdate": {"type": "string"},
+        "name": {"type": "string", "minLength": 1},
+        "season": {"type": "integer", "minimum": 1},
+        "episode_number": {"type": "integer", "minimum": 1},
+        "image_path": {"type": "string"},
+        "description": {"type": "string"},
+        "synopsis": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Location",
+  "description": "Contrato de GET /locations/{id}",
+  "type": "object",
+  "required": ["id", "name", "town", "use", "image_path"],
+  "properties": {
+    "id": {"type": "integer", "minimum": 1},
+    "description": {"type": "string"},
+    "first_appearance_ep_id": {"type": ["integer", "null"]},
+    "first_appearance_sh_id": {"type": ["integer", "null"]},
+    "first_appearance_ep": {"oneOf": [{"$ref": "#/definitions/episode"}, {"type": "null"}]},
+    "first_appearance_sh": {"oneOf": [{"$ref": "#/definitions/episode"}, {"type": "null"}]},
+    "image_path": {"type": "string", "pattern": "^/"},
+    "name": {"type": "string", "minLength": 1},
+    "town": {"type": "string", "minLength": 1},
+    "use": {"type": "string", "minLength": 1}
+  },
+  "definitions": {
+    "episode": {
+      "type": "object",
+      "required": ["id", "name", "season", "episode_number", "airdate"],
+      "properties": {
+        "id": {"type": "integer"},
+        "airdate": {"type": "string"},
+        "name": {"type": "string", "minLength": 1},
+        "season": {"type": "integer", "minimum": 1},
+        "episode_number": {"type": "integer", "minimum": 1},
+        "image_path": {"type": "string"},
+        "description": {"type": "string"},
+        "synopsis": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

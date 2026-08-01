@@ -1,0 +1,12 @@
+[
+  {"id": 1, "name": "Homer Simpson", "gender": "Male", "status": "Alive"},
+  {"id": 2, "name": "Marge Simpson", "gender": "Female", "status": "Alive"},
+  {"id": 3, "name": "Bart Simpson", "gender": "Male", "status": "Alive"},
+  {"id": 4, "name": "Lisa Simpson", "gender": "Female", "status": "Alive"},
+  {"id": 5, "name": "Maggie Simpson", "gender": "Female", "status": "Alive"},
+  {"id": 9, "name": "Ned Flanders", "gender": "Male", "status": "Alive"},
+  {"id": 10, "name": "Maude Flanders", "gender": "Female", "status": "Deceased"},
+  {"id": 13, "name": "Charles Montgomery Burns", "gender": "Male", "status": "Alive"},
+  {"id": 16, "name": "Moe Szyslak", "gender": "Male", "status": "Alive"},
+  {"id": 20, "name": "Edna Krabappel", "gender": "Female", "status": "Deceased"}
+]

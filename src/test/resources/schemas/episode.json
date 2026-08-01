@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Episode",
+  "description": "Contrato de GET /episodes/{id}",
+  "type": "object",
+  "required": ["id", "name", "season", "episode_number", "airdate"],
+  "properties": {
+    "id": {"type": "integer", "minimum": 1},
+    "airdate": {"type": "string"},
+    "description": {"type": "string"},
+    "episode_number": {"type": "integer", "minimum": 1},
+    "image_path": {"type": "string", "pattern": "^/"},
+    "name": {"type": "string", "minLength": 1},
+    "season": {"type": "integer", "minimum": 1},
+    "synopsis": {"type": "string"}
+  },
+  "additionalProperties": false
+}
