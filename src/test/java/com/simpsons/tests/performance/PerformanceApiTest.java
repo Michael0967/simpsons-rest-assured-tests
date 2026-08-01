@@ -1,8 +1,11 @@
 package com.simpsons.tests.performance;
 
 import com.simpsons.BaseApiTest;
-import com.simpsons.client.SimpsonsApiClient;
 import com.simpsons.core.ApiConfig;
+import com.simpsons.screenplay.Actor;
+import com.simpsons.screenplay.abilities.ApiAbility;
+import com.simpsons.screenplay.tasks.FetchCharacter;
+import com.simpsons.screenplay.tasks.FetchResource;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -16,13 +19,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import static com.simpsons.screenplay.questions.TheResponse.status;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Pruebas de performance: SLA de latencia por endpoint y estabilidad
- * bajo carga concurrente. Los umbrales son configurables vía
- * config.properties (performance.latency.*, performance.concurrency.*).
- * Correr: mvn test -Pperformance
+ * Performance tests: latency SLA per endpoint and stability under concurrent
+ * load. Thresholds are configurable via config.properties
+ * (performance.latency.*, performance.concurrency.*).
+ * Run: mvn test -Pperformance
  */
 @Tag("performance")
 class PerformanceApiTest extends BaseApiTest {
@@ -32,38 +36,48 @@ class PerformanceApiTest extends BaseApiTest {
 
     @FunctionalInterface
     private interface RequestTask {
-        Response call(SimpsonsApiClient client) throws Exception;
+        Response call(Actor actor);
     }
 
     @Test
-    @DisplayName("El detalle de personaje cumple el SLA de latencia")
+    @DisplayName("Character detail meets the latency SLA")
     void characterDetailMeetsLatencyTarget() throws Exception {
-        var samples = fireConcurrently(1, measureIterations(), c -> c.getCharacter(1));
+        var samples = fireConcurrently(1, measureIterations(), actor -> {
+            actor.attemptsTo(FetchCharacter.withId(1));
+            return actor.asksFor(status());
+        });
         assertLatency(samples, "GET /characters/1");
     }
 
     @Test
-    @DisplayName("Los listados de los tres recursos cumplen el SLA de latencia")
+    @DisplayName("The three list endpoints meet the latency SLA")
     void listEndpointsMeetLatencyTarget() throws Exception {
         for (String resource : List.of("/characters", "/episodes", "/locations")) {
-            var samples = fireConcurrently(1, measureIterations(), c -> c.get(resource));
+            String target = resource;
+            var samples = fireConcurrently(1, measureIterations(), actor -> {
+                actor.attemptsTo(FetchResource.named(target));
+                return actor.asksFor(status());
+            });
             assertLatency(samples, "GET " + resource);
         }
     }
 
     @Test
-    @DisplayName("Bajo carga concurrente la API se mantiene estable y sin errores")
+    @DisplayName("Under concurrent load the API stays stable and error-free")
     void concurrentLoadStaysStable() throws Exception {
-        var samples = fireConcurrently(concurrencyThreads(), concurrencyTotal(), c -> c.getCharacter(1));
+        var samples = fireConcurrently(concurrencyThreads(), concurrencyTotal(), actor -> {
+            actor.attemptsTo(FetchCharacter.withId(1));
+            return actor.asksFor(status());
+        });
 
         long serverErrors = samples.stream().filter(s -> s.status() >= 500).count();
         long clientErrors = samples.stream().filter(s -> s.status() >= 400 && s.status() < 500).count();
 
-        assertThat(serverErrors).as("errores 5xx bajo carga").isZero();
-        assertThat(clientErrors).as("errores 4xx bajo carga").isZero();
-        assertThat(samples).allMatch(s -> s.status() == 200).as("todas las respuestas 200");
+        assertThat(serverErrors).as("5xx errors under load").isZero();
+        assertThat(clientErrors).as("4xx errors under load").isZero();
+        assertThat(samples).allMatch(s -> s.status() == 200).as("all responses 200");
 
-        assertLatency(samples, "GET /characters/1 (concurrente)");
+        assertLatency(samples, "GET /characters/1 (concurrent)");
     }
 
     private static List<LatencySample> fireConcurrently(int threads, int totalRequests, RequestTask task)
@@ -75,9 +89,9 @@ class PerformanceApiTest extends BaseApiTest {
         for (int i = 0; i < totalRequests; i++) {
             futures.add(pool.submit(() -> {
                 start.await();
-                SimpsonsApiClient client = new SimpsonsApiClient();
+                Actor worker = Actor.named("Load tester").whoCan(ApiAbility.callingTheSimpsonsApi());
                 long t0 = System.nanoTime();
-                Response response = task.call(client);
+                Response response = task.call(worker);
                 return new LatencySample(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - t0),
                         response.getStatusCode());
             }));
@@ -85,7 +99,7 @@ class PerformanceApiTest extends BaseApiTest {
 
         start.countDown();
         pool.shutdown();
-        assertThat(pool.awaitTermination(5, TimeUnit.MINUTES)).as("todos los hilos terminaron").isTrue();
+        assertThat(pool.awaitTermination(5, TimeUnit.MINUTES)).as("all threads finished").isTrue();
 
         List<LatencySample> samples = new ArrayList<>();
         for (Future<LatencySample> future : futures) {
@@ -98,9 +112,9 @@ class PerformanceApiTest extends BaseApiTest {
         double avg = averageMs(samples);
         double p95 = percentileMs(samples, 95);
 
-        assertThat(avg).as("latencia media de %s (ms)", label)
+        assertThat(avg).as("average latency of %s (ms)", label)
                 .isLessThanOrEqualTo(avgThresholdMs());
-        assertThat(p95).as("p95 de %s (ms)", label)
+        assertThat(p95).as("p95 of %s (ms)", label)
                 .isLessThanOrEqualTo(p95ThresholdMs());
     }
 

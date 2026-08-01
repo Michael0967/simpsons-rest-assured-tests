@@ -7,10 +7,10 @@ import io.restassured.specification.RequestSpecification;
 import java.util.Map;
 
 /**
- * Fachada de alto nivel sobre los endpoints de The Simpsons API.
+ * High-level facade over The Simpsons API endpoints.
  *
- * Los tests no interactúan con Rest Assured directamente: llaman a métodos
- * tipados de aquí. Si el endpoint cambia, solo cambia esta clase.
+ * Tests do not interact with Rest Assured directly: they call the typed
+ * methods on this facade. If an endpoint changes, only this class changes.
  */
 public class SimpsonsApiClient {
 
@@ -65,7 +65,7 @@ public class SimpsonsApiClient {
     }
 
     // ------------------------------------------------------------------
-    // Casos de error / genéricos
+    // Error cases / generic
     // ------------------------------------------------------------------
 
     public Response getResourcePage(String resource, int page) {
@@ -101,6 +101,14 @@ public class SimpsonsApiClient {
         return io.restassured.RestAssured.given()
                 .spec(spec)
                 .headers(headers)
+                .when()
+                .get(resource);
+    }
+
+    public Response getWithQueryParams(String resource, Map<String, String> queryParams) {
+        return io.restassured.RestAssured.given()
+                .spec(spec)
+                .queryParams(queryParams)
                 .when()
                 .get(resource);
     }

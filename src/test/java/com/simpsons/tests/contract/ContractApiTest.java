@@ -1,61 +1,71 @@
 package com.simpsons.tests.contract;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.simpsons.BaseApiTest;
+import com.simpsons.screenplay.tasks.FetchCharacter;
+import com.simpsons.screenplay.tasks.FetchCharacters;
+import com.simpsons.screenplay.tasks.FetchEpisode;
+import com.simpsons.screenplay.tasks.FetchLocation;
 import com.simpsons.validation.ApiSchemaValidator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import static com.simpsons.screenplay.questions.TheResponse.bodyField;
+import static com.simpsons.screenplay.questions.TheResponse.status;
 import static io.restassured.module.jsv.JsonSchemaValidator.matchesJsonSchemaInClasspath;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
- * Validación de contratos estructurales contra JSON Schema.
- * Correr: mvn test -Pcontract
+ * Structural contract validation against JSON Schema.
+ * Run: mvn test -Pcontract
  */
 @Tag("contract")
 class ContractApiTest extends BaseApiTest {
 
     @Test
-    @DisplayName("El detalle de personaje cumple su schema")
+    @DisplayName("Character detail matches its schema")
     void characterDetailMatchesContract() {
-        ApiSchemaValidator.validate(client.getCharacter(1), "character-detail.json").statusCode(200);
+        actor.attemptsTo(FetchCharacter.withId(1));
+        ApiSchemaValidator.validate(actor.asksFor(status()), "character-detail.json").statusCode(200);
     }
 
     @Test
-    @DisplayName("Los items del listado de personajes cumplen su schema")
+    @DisplayName("Character list items match their schema")
     void characterListItemMatchesContract() throws Exception {
-        Object item = client.getCharacters(1).then().extract().jsonPath().get("results[0]");
-        String itemJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(item);
+        actor.attemptsTo(FetchCharacters.onPage(1));
+        Object item = actor.asksFor(bodyField("results[0]"));
+        String itemJson = new ObjectMapper().writeValueAsString(item);
 
         assertThat(itemJson,
                 matchesJsonSchemaInClasspath("schemas/character-list-item.json"));
     }
 
     @Test
-    @DisplayName("El episodio cumple su schema")
+    @DisplayName("Episode matches its schema")
     void episodeMatchesContract() {
-        ApiSchemaValidator.validate(client.getEpisode(1), "episode.json").statusCode(200);
+        actor.attemptsTo(FetchEpisode.withId(1));
+        ApiSchemaValidator.validate(actor.asksFor(status()), "episode.json").statusCode(200);
     }
 
     @Test
-    @DisplayName("La ubicación cumple su schema")
+    @DisplayName("Location matches its schema")
     void locationMatchesContract() {
-        ApiSchemaValidator.validate(client.getLocation(1), "location.json").statusCode(200);
+        actor.attemptsTo(FetchLocation.withId(1));
+        ApiSchemaValidator.validate(actor.asksFor(status()), "location.json").statusCode(200);
     }
 
     @Test
-    @DisplayName("El envoltorio de paginación cumple su schema")
+    @DisplayName("The paged response wrapper matches its schema")
     void pagedResponseMatchesContract() {
-        client.getCharacters(1)
-                .then()
-                .statusCode(200)
-                .body(matchesJsonSchemaInClasspath("schemas/paged-response.json"));
+        actor.attemptsTo(FetchCharacters.onPage(1));
+        ApiSchemaValidator.validate(actor.asksFor(status()), "paged-response.json").statusCode(200);
     }
 
     @Test
-    @DisplayName("Las respuestas de error cumplen su schema")
+    @DisplayName("Error responses match their schema")
     void errorResponseMatchesContract() {
-        ApiSchemaValidator.validate(client.getCharacter(999_999), "error.json").statusCode(404);
+        actor.attemptsTo(FetchCharacter.withId(999_999));
+        ApiSchemaValidator.validate(actor.asksFor(status()), "error.json").statusCode(404);
     }
 }

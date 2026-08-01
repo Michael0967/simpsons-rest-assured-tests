@@ -9,10 +9,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Logging transversal: una línea resumida por petición con su duración.
- * Solo los 5xx se registran como ERROR; los 4xx (esperados en pruebas de
- * error/seguridad/fuzz) quedan en INFO y su cuerpo en DEBUG para no inundar
- * el log con respuestas de error previsibles.
+ * Cross-cutting logging: one summarized line per request with its duration.
+ * Only 5xx are logged as ERROR; 4xx (expected in error/security/fuzz tests)
+ * stay at INFO with their body at DEBUG so predictable error responses do not
+ * flood the log.
  */
 public class ApiLogFilter implements Filter {
 
@@ -26,25 +26,25 @@ public class ApiLogFilter implements Filter {
         try {
             Response response = ctx.next(requestSpec, responseSpec);
             if (response == null) {
-                log.error("{} {} no devolvió respuesta HTTP", requestSpec.getMethod(), requestSpec.getURI());
+                log.error("{} {} did not return an HTTP response", requestSpec.getMethod(), requestSpec.getURI());
                 return null;
             }
             int status = response.getStatusCode();
             if (status >= 500) {
                 log.error("{} {} -> {} ({} ms)", requestSpec.getMethod(), requestSpec.getURI(),
                         status, elapsedMs(start));
-                log.error("Respuesta de error -> {}", response.body().asString());
+                log.error("Error response -> {}", response.body().asString());
             } else if (status >= 400) {
                 log.info("{} {} -> {} ({} ms)", requestSpec.getMethod(), requestSpec.getURI(),
                         status, elapsedMs(start));
-                log.debug("Respuesta 4xx -> {}", response.body().asString());
+                log.debug("4xx response -> {}", response.body().asString());
             } else {
                 log.info("{} {} -> {} ({} ms)", requestSpec.getMethod(), requestSpec.getURI(),
                         status, elapsedMs(start));
             }
             return response;
         } catch (RuntimeException e) {
-            log.error("{} {} falló tras agotar reintentos ({})", requestSpec.getMethod(),
+            log.error("{} {} failed after exhausting retries ({})", requestSpec.getMethod(),
                     requestSpec.getURI(), e.getMessage());
             throw e;
         }

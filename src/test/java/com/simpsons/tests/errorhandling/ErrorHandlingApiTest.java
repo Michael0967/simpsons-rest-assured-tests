@@ -1,6 +1,10 @@
 package com.simpsons.tests.errorhandling;
 
 import com.simpsons.BaseApiTest;
+import com.simpsons.models.ErrorResponse;
+import com.simpsons.screenplay.interactions.Delete;
+import com.simpsons.screenplay.interactions.Post;
+import com.simpsons.screenplay.tasks.FetchResource;
 import com.simpsons.validation.ApiSchemaValidator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -10,12 +14,13 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
+import static com.simpsons.screenplay.Ensure.*;
+import static com.simpsons.screenplay.questions.TheResponse.*;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 
 /**
- * Comportamiento ante errores: IDs inexistentes, formatos inválidos,
- * métodos no soportados y rutas desconocidas.
+ * Behaviour under errors: unknown ids, invalid formats, unsupported methods
+ * and unknown routes.
  */
 @Tag("regression")
 class ErrorHandlingApiTest extends BaseApiTest {
@@ -38,39 +43,43 @@ class ErrorHandlingApiTest extends BaseApiTest {
 
     @ParameterizedTest(name = "{0} -> 404 ({1})")
     @MethodSource("resources")
-    @DisplayName("Un ID inexistente devuelve 404 con estructura de error")
+    @DisplayName("An unknown id returns 404 with an error structure")
     void unknownIdReturnsStructured404(String resource, String expectedMessage) {
-        client.get(resource + "/999999")
-                .then()
-                .statusCode(404)
-                .body("error", equalTo("Not Found"))
-                .body("statusCode", equalTo(404))
-                .body("message", equalTo(expectedMessage));
+        actor.attemptsTo(FetchResource.named(resource + "/999999"));
 
-        ApiSchemaValidator.validate(client.get(resource + "/999999"), "error.json")
-                .statusCode(404);
+        actor.should(
+                thatTheStatusCode().isEqualTo(404),
+                that(bodyFieldAsString("error")).isEqualTo("Not Found"),
+                that(bodyField("statusCode")).isEqualTo(404),
+                that(bodyFieldAsString("message")).isEqualTo(expectedMessage)
+        );
+
+        ApiSchemaValidator.validate(actor.asksFor(status()), "error.json").statusCode(404);
     }
 
     @ParameterizedTest(name = "/characters/{0} -> 400")
     @MethodSource("invalidIdFormats")
-    @DisplayName("Un ID no numérico devuelve 400")
+    @DisplayName("A non-numeric id returns 400")
     void nonNumericIdReturns400(String invalidId) {
-        client.get("/characters/" + invalidId)
-                .then()
-                .statusCode(400)
-                .body("error", equalTo("Bad Request"))
-                .body("statusCode", equalTo(400))
-                .body("message", equalTo("Validation failed (numeric string is expected)"));
+        actor.attemptsTo(FetchResource.named("/characters/" + invalidId));
 
-        ApiSchemaValidator.validate(client.get("/characters/" + invalidId), "error.json")
-                .statusCode(400);
+        actor.should(
+                thatTheStatusCode().isEqualTo(400),
+                that(bodyFieldAsString("error")).isEqualTo("Bad Request"),
+                that(bodyField("statusCode")).isEqualTo(400),
+                that(bodyFieldAsString("message")).isEqualTo("Validation failed (numeric string is expected)")
+        );
+
+        ApiSchemaValidator.validate(actor.asksFor(status()), "error.json").statusCode(400);
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("resources")
-    @DisplayName("Un ID inexistente deserializa correctamente en POJO de error")
+    @DisplayName("An unknown id deserializes into an error POJO")
     void errorResponseDeserializesIntoPojo(String resource, String expectedMessage) {
-        var error = client.get(resource + "/999999").as(com.simpsons.models.ErrorResponse.class);
+        actor.attemptsTo(FetchResource.named(resource + "/999999"));
+
+        ErrorResponse error = actor.asksFor(as(ErrorResponse.class));
 
         assertThat(error.getError()).isEqualTo("Not Found");
         assertThat(error.getStatusCode()).isEqualTo(404);
@@ -79,17 +88,21 @@ class ErrorHandlingApiTest extends BaseApiTest {
 
     @ParameterizedTest(name = "POST {0}")
     @MethodSource("resourcePaths")
-    @DisplayName("Métodos no soportados devuelven 404")
+    @DisplayName("Unsupported methods return 404")
     void unsupportedMethodsReturn404(String resource) {
-        client.post(resource).then().statusCode(404);
-        client.delete(resource, 1).then().statusCode(404);
+        actor.attemptsTo(Post.to(resource));
+        actor.should(thatTheStatusCode().isEqualTo(404));
+
+        actor.attemptsTo(Delete.resource(resource, 1));
+        actor.should(thatTheStatusCode().isEqualTo(404));
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("unknownRoutes")
-    @DisplayName("Rutas desconocidas devuelven 404")
+    @DisplayName("Unknown routes return 404")
     void unknownRoutesReturn404(String route) {
-        client.get(route).then().statusCode(404);
+        actor.attemptsTo(FetchResource.named(route));
+        actor.should(thatTheStatusCode().isEqualTo(404));
     }
 
     static Stream<Arguments> resourcePaths() {

@@ -1,7 +1,12 @@
 package com.simpsons.tests.security;
 
 import com.simpsons.BaseApiTest;
-import com.simpsons.core.ApiConfig;
+import com.simpsons.screenplay.interactions.SendRequest;
+import com.simpsons.screenplay.questions.AConfigValue;
+import com.simpsons.screenplay.tasks.FetchCharacter;
+import com.simpsons.screenplay.tasks.FetchCharacters;
+import com.simpsons.screenplay.tasks.FetchResource;
+import io.restassured.http.Headers;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -15,19 +20,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import static com.simpsons.screenplay.Ensure.*;
+import static com.simpsons.screenplay.questions.TheResponse.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.SoftAssertions.assertSoftly;
-import static org.hamcrest.Matchers.anyOf;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.emptyOrNullString;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.not;
 
 /**
- * Pruebas de seguridad (caja negra) sobre la API:
- * transporte TLS, headers de seguridad, inyección (SQL/XSS/path traversal),
- * overflow numérico, fuga de detalles internos y métodos HTTP peligrosos.
- * Correr: mvn test -Psecurity
+ * Black-box security tests against the API: TLS transport, security headers,
+ * injection (SQL/XSS/path traversal), numeric overflow, internal-detail leaks
+ * and dangerous HTTP methods.
+ * Run: mvn test -Psecurity
  */
 @Tag("security")
 class SecurityApiTest extends BaseApiTest {
@@ -81,15 +83,18 @@ class SecurityApiTest extends BaseApiTest {
     }
 
     @Test
-    @DisplayName("La API se sirve por HTTPS (TLS en tránsito)")
+    @DisplayName("The API is served over HTTPS (TLS in transit)")
     void apiIsServedOverTls() {
-        assertThat(ApiConfig.baseUri()).as("base URI").startsWith("https://");
+        actor.should(that(AConfigValue.string("api.base.uri")).startsWith("https://"));
     }
 
     @Test
-    @DisplayName("Las respuestas incluyen los headers de seguridad esenciales")
+    @DisplayName("Responses include the essential security headers")
     void securityHeadersPresent() {
-        var headers = client.getCharacter(1).then().statusCode(200).extract().headers();
+        actor.attemptsTo(FetchCharacter.withId(1));
+        actor.should(thatTheStatusCode().isEqualTo(200));
+
+        Headers headers = actor.asksFor(headers());
 
         assertSoftly(softly -> {
             softly.assertThat(headers.getValue("X-Content-Type-Options"))
@@ -107,87 +112,87 @@ class SecurityApiTest extends BaseApiTest {
 
     @ParameterizedTest(name = "SQLi: {0}")
     @MethodSource("sqlPayloads")
-    @DisplayName("Los payloads de inyección SQL se rechazan sin filtrar datos")
+    @DisplayName("SQL injection payloads are rejected without leaking data")
     void sqlInjectionPayloadsRejected(String payload) {
-        String body = client.get("/characters/" + payload)
-                .then()
-                .statusCode(anyOf(equalTo(400), equalTo(404)))
-                .extract()
-                .asString();
+        actor.attemptsTo(FetchResource.named("/characters/" + payload));
+        actor.should(thatTheStatusCode().isIn(400, 404));
 
+        String body = actor.asksFor(body());
         assertThat(body.toLowerCase())
-                .as("respuesta para payload %s", payload)
+                .as("response for payload %s", payload)
                 .doesNotContain("sql", "syntax", "select", "from");
     }
 
     @ParameterizedTest(name = "XSS: {0}")
     @MethodSource("xssPayloads")
-    @DisplayName("Los payloads XSS se rechazan sin reflejarse en la respuesta")
+    @DisplayName("XSS payloads are rejected without being reflected in the response")
     void xssPayloadsNotReflected(String payload) {
-        String body = client.get("/characters/" + payload)
-                .then()
-                .statusCode(anyOf(equalTo(400), equalTo(404)))
-                .extract()
-                .asString();
+        actor.attemptsTo(FetchResource.named("/characters/" + payload));
+        actor.should(thatTheStatusCode().isIn(400, 404));
 
-        assertThat(body).as("respuesta para payload %s", payload).doesNotContain(payload);
+        String body = actor.asksFor(body());
+        assertThat(body).as("response for payload %s", payload).doesNotContain(payload);
     }
 
     @ParameterizedTest(name = "Path traversal: {0}")
     @MethodSource("traversalPayloads")
-    @DisplayName("El path traversal no accede a archivos del servidor")
+    @DisplayName("Path traversal does not access server files")
     void pathTraversalRejected(String payload) {
-        String body = client.get("/characters/" + payload)
-                .then()
-                .statusCode(not(equalTo(200)))
-                .statusCode(not(equalTo(500)))
-                .extract()
-                .asString();
+        actor.attemptsTo(FetchResource.named("/characters/" + payload));
+        actor.should(
+                thatTheStatusCode().isNotEqualTo(200),
+                thatTheStatusCode().isNotEqualTo(500)
+        );
 
-        assertThat(body).as("respuesta para payload %s", payload)
+        String body = actor.asksFor(body());
+        assertThat(body).as("response for payload %s", payload)
                 .doesNotContain("root:", "Exception");
     }
 
     @ParameterizedTest(name = "Overflow: {0}")
     @MethodSource("overflowPayloads")
-    @DisplayName("Los IDs fuera de rango se rechazan o resuelven sin romper la API")
+    @DisplayName("Out-of-range ids are rejected or resolve without breaking the API")
     void integerOverflowRejected(String payload) {
-        client.get("/characters/" + payload)
-                .then()
-                .statusCode(anyOf(equalTo(200), equalTo(400), equalTo(404)));
+        actor.attemptsTo(FetchResource.named("/characters/" + payload));
+        actor.should(thatTheStatusCode().isIn(200, 400, 404));
     }
 
     @Test
-    @DisplayName("CONOCIDO: /characters/2147483648 hace caer la API (500/nulo) — requiere fix")
+    @DisplayName("KNOWN: /characters/2147483648 crashes the API (500/null) — requires fix")
     void knownIntegerOverflowCrashIsDocumented() {
-        Response response = client.get("/characters/2147483648");
+        actor.attemptsTo(FetchResource.named("/characters/2147483648"));
+
+        Response response = actor.asksFor(status());
         if (response == null) {
             return;
         }
         assertThat(response.getStatusCode())
-                .as("2147483648 debe devolver 4xx; la API responde 500 (bug)")
+                .as("2147483648 should return 4xx; the API answers 500 (bug)")
                 .isEqualTo(500);
     }
 
     @ParameterizedTest(name = "{0} -> {1}")
     @MethodSource("errorScenarios")
-    @DisplayName("Las respuestas de error no filtran detalles internos")
+    @DisplayName("Error responses do not leak internal details")
     void noInternalDetailsLeakedOnError(String path, int expectedStatus) {
-        String body = client.get(path).then().statusCode(expectedStatus).extract().asString();
+        actor.attemptsTo(FetchResource.named(path));
+        actor.should(thatTheStatusCode().isEqualTo(expectedStatus));
 
+        String body = actor.asksFor(body());
         assertThat(body)
-                .as("respuesta de error de %s", path)
+                .as("error response of %s", path)
                 .doesNotContain("Exception", "StackTrace", "Caused by", ".java:", "at com.", "Internal Server");
     }
 
     @Test
-    @DisplayName("Métodos de escritura y peligrosos no ejecutan operaciones")
+    @DisplayName("Write and dangerous HTTP methods do not execute operations")
     void unsafeHttpMethodsRejected() {
         assertSoftly(softly -> {
             for (String method : List.of("PUT", "PATCH", "TRACE", "DELETE")) {
-                int status = client.request(method, "/characters/1").statusCode();
+                actor.attemptsTo(SendRequest.with(method, "/characters/1"));
+                int status = actor.asksFor(statusCode());
                 softly.assertThat(status)
-                        .as("HTTP %s sobre /characters/1", method)
+                        .as("HTTP %s on /characters/1", method)
                         .isNotEqualTo(200)
                         .isLessThan(500);
             }
@@ -195,51 +200,57 @@ class SecurityApiTest extends BaseApiTest {
     }
 
     @Test
-    @DisplayName("OPTIONS no rompe (preflight CORS)")
+    @DisplayName("OPTIONS is tolerated (CORS preflight)")
     void optionsIsTolerated() {
-        assertThat(client.request("OPTIONS", "/characters/1").statusCode())
-                .as("OPTIONS /characters/1").isLessThan(500);
+        actor.attemptsTo(SendRequest.with("OPTIONS", "/characters/1"));
+        actor.should(thatTheStatusCode().isLessThan(500));
     }
 
     @Test
-    @DisplayName("Las respuestas de error no se sirven como HTML (previene XSS)")
+    @DisplayName("Error responses are not served as HTML (prevents XSS)")
     void errorsAreNotHtml() {
-        client.get("/nope")
-                .then()
-                .statusCode(404)
-                .header("Content-Type", not(containsString("text/html")));
+        actor.attemptsTo(FetchResource.named("/nope"));
+        actor.should(
+                thatTheStatusCode().isEqualTo(404),
+                that(header("Content-Type")).doesNotContain("text/html")
+        );
 
-        client.get("/characters/abc")
-                .then()
-                .statusCode(anyOf(equalTo(400), equalTo(404)))
-                .header("Content-Type", not(containsString("text/html")));
+        actor.attemptsTo(FetchResource.named("/characters/abc"));
+        actor.should(
+                thatTheStatusCode().isIn(400, 404),
+                that(header("Content-Type")).doesNotContain("text/html")
+        );
     }
 
     @Test
-    @DisplayName("Los recursos no exponen campos sensibles")
+    @DisplayName("Resources do not expose sensitive field names")
     void sensitiveFieldNamesNotExposed() {
         Set<String> sensitive = Set.of(
                 "password", "secret", "token", "api_key", "apikey",
                 "ssn", "credit_card", "email", "phone", "session"
         );
 
-        List<Map<String, Object>> results = client.getCharacters(1)
-                .then().statusCode(200)
-                .extract().jsonPath().getList("results");
+        actor.attemptsTo(FetchCharacters.onPage(1));
+        actor.should(thatTheStatusCode().isEqualTo(200));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> results =
+                (List<Map<String, Object>>) (List<?>) actor.asksFor(bodyList("results", Map.class));
 
         for (Map<String, Object> item : results) {
             assertThat(sensitive)
-                    .as("campos sensibles en item con keys %s", item.keySet())
+                    .as("sensitive fields in item with keys %s", item.keySet())
                     .noneMatch(item::containsKey);
         }
     }
 
     @Test
-    @DisplayName("El mensaje de error ante un ID inválido no es vacío")
+    @DisplayName("The error message for an invalid id is informative")
     void errorMessageIsInformative() {
-        client.get("/characters/abc")
-                .then()
-                .statusCode(400)
-                .body("message", not(emptyOrNullString()));
+        actor.attemptsTo(FetchResource.named("/characters/abc"));
+        actor.should(
+                thatTheStatusCode().isEqualTo(400),
+                that(bodyFieldAsString("message")).isNotBlank()
+        );
     }
 }

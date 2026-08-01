@@ -5,16 +5,17 @@
 ![Build](https://img.shields.io/github/actions/workflow/status/Michael0967/simpsons-rest-assured-tests/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-API testing framework for [The Simpsons API](https://thesimpsonsapi.com/), built with Rest Assured + JUnit 5 + Maven. Portfolio project.
+API testing framework for [The Simpsons API](https://thesimpsonsapi.com/), built with Rest Assured + JUnit 5 + Maven and structured with the **Screenplay pattern**. Portfolio project.
 
 ## Stack
 
 | Component         | Library                          |
 |-------------------|----------------------------------|
+| Test style        | Screenplay pattern (custom, Serenity-flavoured) |
 | HTTP / validation | Rest Assured 5.5                 |
 | Runner            | JUnit 5 (Jupiter)                |
 | Contracts         | JSON Schema (json-schema-validator) |
-| Assertions        | Hamcrest + AssertJ               |
+| Assertions        | AssertJ (consequences) + Hamcrest |
 | Deserialization   | Jackson                          |
 | Reporting         | Allure                           |
 | Logging           | Logback                          |
@@ -86,6 +87,34 @@ API_BASE_URI=https://thesimpsonsapi.com mvn test   # environment variable
 
 ## Architecture
 
+The tests are written with a lightweight, dependency-free **Screenplay pattern**:
+
+- **Actor** (`screenplay/Actor.java`) — the persona that performs tasks and
+  verifies expectations. Each test method gets its own actor (per-instance, so
+  parallel execution stays isolated).
+- **Ability** (`screenplay/abilities/ApiAbility.java`) — what the actor can do:
+  call the Simpsons API. Keeps the last response for questions to inspect.
+- **Task** (`screenplay/tasks/*`) — business-meaningful actions such as
+  `FetchCharacter.withId(1)` or `FetchCharacters.onPage(1)`.
+- **Interaction** (`screenplay/interactions/*`) — single low-level HTTP actions
+  (`Get`, `Post`, `Delete`, `SendRequest`).
+- **Question** (`screenplay/questions/TheResponse.java`) — reads facts from the
+  response: status, headers, body fields, deserialized POJOs.
+- **Consequence** (`screenplay/Ensure.java`) — the verification, e.g.
+  `Ensure.thatTheStatusCode().isEqualTo(200)`.
+
+A test reads like a scenario:
+
+```java
+actor.attemptsTo(FetchCharacter.withId(1));
+
+actor.should(
+        thatTheStatusCode().isEqualTo(200),
+        that(bodyFieldAsString("name")).isEqualTo("Homer Simpson"),
+        that(bodyField("phrases")).contains("Doh!")
+);
+```
+
 ```
 src/test/java/com/simpsons/
 ├── core/            # ApiConfig (external config), RestClient (timeouts + filters)
@@ -94,12 +123,17 @@ src/test/java/com/simpsons/
 ├── data/            # DataReader + test data records (external data)
 ├── models/          # POJOs (Character, Episode, Location, PaginatedResponse, ErrorResponse)
 ├── validation/      # ApiSchemaValidator (JSON Schema)
+├── screenplay/      # Screenplay core: Actor, Ability, Task, Interaction, Question, Consequence
+│   ├── abilities/   #   ApiAbility (calls the API via SimpsonsApiClient)
+│   ├── tasks/       #   FetchCharacter, FetchCharacters, FetchEpisode, ... FetchPage, FetchResource
+│   ├── interactions/#   Get, Post, Delete, SendRequest
+│   └── questions/   #   TheResponse, AConfigValue
 └── tests/           # smoke, characters, episodes, locations, pagination,
                      # errorhandling, contract, security, performance, fuzz
 src/test/resources/
 ├── config.properties
 ├── allure.properties
-├── categories.json    # categorías de fallos de Allure
+├── categories.json    # Allure failure categories
 ├── data/            # external test data in JSON
 ├── schemas/         # JSON Schema contracts
 └── logback-test.xml
@@ -112,7 +146,8 @@ src/test/resources/
 
 ## Design decisions (senior QA)
 
-- **Service layer**: tests call `SimpsonsApiClient` (typed methods), never Rest Assured directly. An endpoint change is resolved in one place.
+- **Screenplay pattern**: tests are written as *actor → attempts → should* scenarios (`screenplay/`), so business intent is explicit and every HTTP concern lives in typed tasks/questions/interactions.
+- **Service layer under Screenplay**: tasks delegate to `SimpsonsApiClient` (typed methods), never to Rest Assured directly. An endpoint change is resolved in one place.
 - **External config**: URL, timeouts and retries come from `config.properties`, overridable via `-D` or environment variables.
 - **Anti-flakiness**: `RetryFilter` retries with exponential backoff on 429/5xx and connection failures; explicit connect/read timeouts.
 - **External data**: characters/episodes/locations to validate live in `data/*.json`, not hardcoded in tests. Tests are `@ParameterizedTest`.

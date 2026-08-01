@@ -6,6 +6,9 @@ import com.simpsons.data.PopularCharacter;
 import com.simpsons.models.Character;
 import com.simpsons.models.Episode;
 import com.simpsons.models.PaginatedResponse;
+import com.simpsons.screenplay.tasks.FetchCharacter;
+import com.simpsons.screenplay.tasks.FetchCharacters;
+import com.simpsons.screenplay.tasks.FetchEpisode;
 import com.simpsons.validation.ApiSchemaValidator;
 import io.restassured.common.mapper.TypeRef;
 import org.junit.jupiter.api.DisplayName;
@@ -16,31 +19,37 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
+import static com.simpsons.screenplay.Ensure.*;
+import static com.simpsons.screenplay.questions.TheResponse.*;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.*;
 
 @Tag("regression")
 class CharactersApiTest extends BaseApiTest {
 
     @Test
-    @DisplayName("GET /characters/1 devuelve a Homer con sus frases")
+    @DisplayName("GET /characters/1 returns Homer with his phrases")
     void getHomerReturnsExpectedData() {
-        client.getCharacter(1)
-                .then()
-                .statusCode(200)
-                .body("id", equalTo(1))
-                .body("name", equalTo("Homer Simpson"))
-                .body("gender", equalTo("Male"))
-                .body("status", equalTo("Alive"))
-                .body("portrait_path", equalTo("/character/1.webp"))
-                .body("phrases", hasItem("Doh!"))
-                .body("phrases", hasSize(greaterThanOrEqualTo(1)));
+        actor.attemptsTo(FetchCharacter.withId(1));
+
+        actor.should(
+                thatTheStatusCode().isEqualTo(200),
+                that(bodyField("id")).isEqualTo(1),
+                that(bodyFieldAsString("name")).isEqualTo("Homer Simpson"),
+                that(bodyFieldAsString("gender")).isEqualTo("Male"),
+                that(bodyFieldAsString("status")).isEqualTo("Alive"),
+                that(bodyFieldAsString("portrait_path")).isEqualTo("/character/1.webp"),
+                that(bodyField("phrases")).contains("Doh!"),
+                that(bodyField("phrases"), phrases ->
+                        assertThat((java.util.Collection<?>) phrases).hasSizeGreaterThanOrEqualTo(1))
+        );
     }
 
     @Test
-    @DisplayName("El detalle se deserializa en POJO incluyendo anidados")
+    @DisplayName("The detail deserializes into a POJO including nested models")
     void getCharacterDeserializesIntoPojo() {
-        Character homer = client.getCharacter(1).as(Character.class);
+        actor.attemptsTo(FetchCharacter.withId(1));
+
+        Character homer = actor.asksFor(as(Character.class));
 
         assertThat(homer.getName()).isEqualTo("Homer Simpson");
         assertThat(homer.getAge()).isEqualTo(39);
@@ -55,23 +64,27 @@ class CharactersApiTest extends BaseApiTest {
                 .isEqualTo("Good Night");
     }
 
-    @ParameterizedTest(name = "Personaje {0} ({1})")
+    @ParameterizedTest(name = "Character {0} ({1})")
     @MethodSource("popularCharacters")
-    @DisplayName("Personajes populares resuelven con sus datos")
+    @DisplayName("Popular characters resolve with their data")
     void popularCharactersResolve(PopularCharacter expected) {
-        Character actual = client.getCharacter(expected.id()).as(Character.class);
+        actor.attemptsTo(FetchCharacter.withId(expected.id()));
 
-        assertThat(actual.getName()).isEqualTo(expected.name());
-        assertThat(actual.getGender()).isEqualTo(expected.gender());
-        assertThat(actual.getStatus()).isEqualTo(expected.status());
-        assertThat(actual.getPortraitPath()).startsWith("/");
+        actor.should(
+                that(bodyFieldAsString("name")).isEqualTo(expected.name()),
+                that(bodyFieldAsString("gender")).isEqualTo(expected.gender()),
+                that(bodyFieldAsString("status")).isEqualTo(expected.status()),
+                that(bodyFieldAsString("portrait_path")).startsWith("/")
+        );
     }
 
     @Test
-    @DisplayName("El listado pagina 20 items y mantiene el total")
+    @DisplayName("The listing pages 20 items and keeps the total")
     void listIsPaginatedConsistently() {
-        PaginatedResponse<Character> page = client.getCharacters(1).as(new TypeRef<>() {
-        });
+        actor.attemptsTo(FetchCharacters.onPage(1));
+
+        PaginatedResponse<Character> page = actor.asksFor(as(new TypeRef<PaginatedResponse<Character>>() {
+        }));
 
         assertThat(page.getCount()).isEqualTo(1_182);
         assertThat(page.getPages()).isEqualTo(60);
@@ -81,28 +94,37 @@ class CharactersApiTest extends BaseApiTest {
     }
 
     @Test
-    @DisplayName("Los IDs son contiguos: el 1182 existe y el 1183 no")
+    @DisplayName("Ids are contiguous: 1182 exists and 1183 does not")
     void characterIdsAreContiguous() {
-        client.getCharacter(1_182).then().statusCode(200).body("id", equalTo(1_182));
-        client.getCharacter(1_183).then().statusCode(404);
+        actor.attemptsTo(FetchCharacter.withId(1_182));
+        actor.should(
+                thatTheStatusCode().isEqualTo(200),
+                that(bodyField("id")).isEqualTo(1_182)
+        );
+
+        actor.attemptsTo(FetchCharacter.withId(1_183));
+        actor.should(thatTheStatusCode().isEqualTo(404));
     }
 
     @Test
-    @DisplayName("La primera aparición del personaje coincide con el endpoint de episodios")
+    @DisplayName("A character's first appearance matches the episode resource")
     void firstAppearanceMatchesEpisodeResource() {
-        Character homer = client.getCharacter(1).as(Character.class);
+        actor.attemptsTo(FetchCharacter.withId(1));
+        Character homer = actor.asksFor(as(Character.class));
 
-        Episode episode = client.getEpisode(homer.getFirstAppearanceEpId()).as(Episode.class);
+        actor.attemptsTo(FetchEpisode.withId(homer.getFirstAppearanceEpId()));
+        Episode episode = actor.asksFor(as(Episode.class));
+
         assertThat(episode.getName()).isEqualTo(homer.getFirstAppearanceEp().getName());
         assertThat(episode.getId()).isEqualTo(homer.getFirstAppearanceEp().getId());
     }
 
     @Test
     @Tag("contract")
-    @DisplayName("El detalle de personaje cumple su JSON Schema")
+    @DisplayName("Character detail matches its JSON schema")
     void characterDetailMatchesContract() {
-        ApiSchemaValidator.validate(client.getCharacter(1), "character-detail.json")
-                .statusCode(200);
+        actor.attemptsTo(FetchCharacter.withId(1));
+        ApiSchemaValidator.validate(actor.asksFor(status()), "character-detail.json").statusCode(200);
     }
 
     static Stream<org.junit.jupiter.params.provider.Arguments> popularCharacters() {

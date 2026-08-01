@@ -6,9 +6,8 @@ import io.restassured.response.Response;
 import static io.restassured.module.jsv.JsonSchemaValidator.matchesJsonSchemaInClasspath;
 
 /**
- * Validación de contratos: comprueba que la respuesta respeta su JSON Schema
- * (src/test/resources/schemas). Actúa como la red de seguridad estructural
- * del proyecto.
+ * Contract validation: checks that a response respects its JSON Schema
+ * (src/test/resources/schemas). Acts as the project's structural safety net.
  */
 public final class ApiSchemaValidator {
 

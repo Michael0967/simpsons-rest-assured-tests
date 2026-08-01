@@ -1,12 +1,15 @@
 package com.simpsons;
 
-import com.simpsons.client.SimpsonsApiClient;
+import com.simpsons.screenplay.Actor;
+import com.simpsons.screenplay.abilities.ApiAbility;
 
 /**
- * Clase base de todos los tests: expone el cliente de API y el validador
- * de contratos sin duplicarlos en cada suite.
+ * Base class for every suite. Each test method gets its own Screenplay
+ * {@link Actor} wired to the Simpsons API. The actor is an instance field (not
+ * static) so tests stay isolated under surefire parallel execution.
  */
 public abstract class BaseApiTest {
 
-    protected static final SimpsonsApiClient client = new SimpsonsApiClient();
+    protected final Actor actor = Actor.named("QA Engineer")
+            .whoCan(ApiAbility.callingTheSimpsonsApi());
 }

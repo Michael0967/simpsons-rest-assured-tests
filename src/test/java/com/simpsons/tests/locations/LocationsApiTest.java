@@ -5,6 +5,8 @@ import com.simpsons.data.DataReader;
 import com.simpsons.data.PopularLocation;
 import com.simpsons.models.Location;
 import com.simpsons.models.PaginatedResponse;
+import com.simpsons.screenplay.tasks.FetchLocation;
+import com.simpsons.screenplay.tasks.FetchLocations;
 import com.simpsons.validation.ApiSchemaValidator;
 import io.restassured.common.mapper.TypeRef;
 import org.junit.jupiter.api.DisplayName;
@@ -15,28 +17,33 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
 
+import static com.simpsons.screenplay.Ensure.*;
+import static com.simpsons.screenplay.questions.TheResponse.*;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 
 @Tag("regression")
 class LocationsApiTest extends BaseApiTest {
 
     @Test
-    @DisplayName("GET /locations/1 devuelve la casa de los Simpson")
+    @DisplayName("GET /locations/1 returns the Simpsons house")
     void getFirstLocationReturnsExpectedData() {
-        client.getLocation(1)
-                .then()
-                .statusCode(200)
-                .body("id", equalTo(1))
-                .body("name", equalTo("742 Evergreen Terrace"))
-                .body("town", equalTo("Springfield"))
-                .body("use", equalTo("Residential"));
+        actor.attemptsTo(FetchLocation.withId(1));
+
+        actor.should(
+                thatTheStatusCode().isEqualTo(200),
+                that(bodyField("id")).isEqualTo(1),
+                that(bodyFieldAsString("name")).isEqualTo("742 Evergreen Terrace"),
+                that(bodyFieldAsString("town")).isEqualTo("Springfield"),
+                that(bodyFieldAsString("use")).isEqualTo("Residential")
+        );
     }
 
     @Test
-    @DisplayName("La ubicación se deserializa en POJO")
+    @DisplayName("The location deserializes into a POJO")
     void getLocationDeserializesIntoPojo() {
-        Location location = client.getLocation(1).as(Location.class);
+        actor.attemptsTo(FetchLocation.withId(1));
+
+        Location location = actor.asksFor(as(Location.class));
 
         assertThat(location.getName()).isEqualTo("742 Evergreen Terrace");
         assertThat(location.getTown()).isEqualTo("Springfield");
@@ -44,21 +51,25 @@ class LocationsApiTest extends BaseApiTest {
         assertThat(location.getImagePath()).startsWith("/");
     }
 
-    @ParameterizedTest(name = "Lugar {0}")
+    @ParameterizedTest(name = "Place {0}")
     @MethodSource("popularLocations")
-    @DisplayName("Ubicaciones icónicas resuelven en Springfield")
+    @DisplayName("Iconic locations resolve in Springfield")
     void popularLocationsResolve(PopularLocation expected) {
-        Location actual = client.getLocation(expected.id()).as(Location.class);
+        actor.attemptsTo(FetchLocation.withId(expected.id()));
 
-        assertThat(actual.getName()).isEqualTo(expected.name());
-        assertThat(actual.getTown()).isEqualTo(expected.town());
+        actor.should(
+                that(bodyFieldAsString("name")).isEqualTo(expected.name()),
+                that(bodyFieldAsString("town")).isEqualTo(expected.town())
+        );
     }
 
     @Test
-    @DisplayName("El listado de ubicaciones pagina 20 items")
+    @DisplayName("The location listing pages 20 items")
     void listIsPaginated() {
-        PaginatedResponse<Location> page = client.getLocations(1).as(new TypeRef<>() {
-        });
+        actor.attemptsTo(FetchLocations.onPage(1));
+
+        PaginatedResponse<Location> page = actor.asksFor(as(new TypeRef<PaginatedResponse<Location>>() {
+        }));
 
         assertThat(page.getCount()).isEqualTo(477);
         assertThat(page.getPages()).isEqualTo(24);
@@ -67,9 +78,10 @@ class LocationsApiTest extends BaseApiTest {
 
     @Test
     @Tag("contract")
-    @DisplayName("La ubicación cumple su JSON Schema")
+    @DisplayName("The location matches its JSON schema")
     void locationMatchesContract() {
-        ApiSchemaValidator.validate(client.getLocation(1), "location.json").statusCode(200);
+        actor.attemptsTo(FetchLocation.withId(1));
+        ApiSchemaValidator.validate(actor.asksFor(status()), "location.json").statusCode(200);
     }
 
     static Stream<org.junit.jupiter.params.provider.Arguments> popularLocations() {

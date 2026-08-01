@@ -1,43 +1,60 @@
 package com.simpsons.tests.smoke;
 
 import com.simpsons.BaseApiTest;
+import com.simpsons.screenplay.tasks.FetchCharacter;
+import com.simpsons.screenplay.tasks.FetchCharacters;
+import com.simpsons.screenplay.tasks.FetchEpisode;
+import com.simpsons.screenplay.tasks.FetchLocation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.Matchers.lessThan;
-import static org.hamcrest.Matchers.notNullValue;
+import static com.simpsons.screenplay.Ensure.*;
+import static com.simpsons.screenplay.questions.TheResponse.*;
 
 /**
- * Verificación rápida de que la API está viva y responde correctamente.
- * Es la primera capa que se ejecuta en CI (mvn test -Psmoke).
+ * Quick verification that the API is alive and responding correctly.
+ * This is the first layer executed in CI (mvn test -Psmoke).
  */
 @Tag("smoke")
 class SmokeApiTest extends BaseApiTest {
 
     @Test
-    @DisplayName("Los tres recursos responden 200")
+    @DisplayName("The three resources respond with 200")
     void coreEndpointsAreReachable() {
-        client.getCharacter(1).then().statusCode(200);
-        client.getEpisode(1).then().statusCode(200);
-        client.getLocation(1).then().statusCode(200);
-        client.getCharacters(1).then().statusCode(200);
+        actor.attemptsTo(FetchCharacter.withId(1));
+        actor.should(thatTheStatusCode().isEqualTo(200));
+
+        actor.attemptsTo(FetchEpisode.withId(1));
+        actor.should(thatTheStatusCode().isEqualTo(200));
+
+        actor.attemptsTo(FetchLocation.withId(1));
+        actor.should(thatTheStatusCode().isEqualTo(200));
+
+        actor.attemptsTo(FetchCharacters.onPage(1));
+        actor.should(thatTheStatusCode().isEqualTo(200));
     }
 
     @Test
-    @DisplayName("Las respuestas tienen formato JSON")
+    @DisplayName("Responses have a JSON format")
     void responsesAreJson() {
-        client.getCharacter(1).then().contentType("application/json");
-        client.getCharacters(1).then().contentType("application/json");
+        actor.attemptsTo(FetchCharacter.withId(1));
+        actor.should(that(contentType()).isEqualTo("application/json"));
+
+        actor.attemptsTo(FetchCharacters.onPage(1));
+        actor.should(that(contentType()).isEqualTo("application/json"));
     }
 
     @Test
     @Tag("performance")
-    @DisplayName("El detalle de personaje responde en menos de 5s")
+    @DisplayName("Character detail responds in under 5 seconds")
     void characterDetailRespondsFastEnough() {
-        client.getCharacter(1).then()
-                .statusCode(200)
-                .body("name", notNullValue())
-                .time(lessThan(5_000L));
+        actor.attemptsTo(FetchCharacter.withId(1));
+
+        actor.should(
+                thatTheStatusCode().isEqualTo(200),
+                that(bodyFieldAsString("name")).isNotNull(),
+                that(responseTimeMs()).isLessThan(5_000L)
+        );
     }
 }

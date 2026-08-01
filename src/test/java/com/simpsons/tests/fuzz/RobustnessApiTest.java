@@ -2,6 +2,8 @@ package com.simpsons.tests.fuzz;
 
 import com.simpsons.BaseApiTest;
 import com.simpsons.core.ApiConfig;
+import com.simpsons.screenplay.interactions.Get;
+import com.simpsons.screenplay.tasks.FetchResource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -10,30 +12,33 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import static com.simpsons.screenplay.Ensure.thatTheStatusCode;
+import static com.simpsons.screenplay.questions.TheResponse.statusCode;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Pruebas de robustez y fuzzing: la API nunca debe caer (5xx) ante
- * entradas aleatorias, IDs/páginas extremas, headers malformados,
- * content negotiation no soportada, rutas raras y unicode.
- * Correr: mvn test -Pfuzz
+ * Robustness and fuzzing: the API must never crash (5xx) on random inputs,
+ * extreme ids/pages, malformed headers, unsupported content negotiation,
+ * unusual paths and unicode.
+ * Run: mvn test -Pfuzz
  */
 @Tag("fuzz")
 class RobustnessApiTest extends BaseApiTest {
 
     @Test
-    @DisplayName("IDs aleatorios nunca producen errores de servidor (5xx)")
+    @DisplayName("Random ids never produce server errors (5xx)")
     void randomNumericIdsNeverFail() {
         Random random = new Random(42);
         for (int i = 0; i < fuzzIterations(); i++) {
             int id = random.nextInt(5_000) + 1;
-            int status = client.get("/characters/" + id).statusCode();
+            actor.attemptsTo(FetchResource.named("/characters/" + id));
+            int status = actor.asksFor(statusCode());
             assertThat(status).as("GET /characters/%d", id).isIn(200, 404);
         }
     }
 
     @Test
-    @DisplayName("Cadenas aleatorias en el path se rechazan con 4xx, nunca 5xx")
+    @DisplayName("Random strings in the path are rejected with 4xx, never 5xx")
     void randomStringsNeverFail() {
         Random random = new Random(42);
         String alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_+.,!~()[]{};:@";
@@ -44,36 +49,39 @@ class RobustnessApiTest extends BaseApiTest {
             for (int j = 0; j < length; j++) {
                 sb.append(alphabet.charAt(random.nextInt(alphabet.length())));
             }
-            int status = client.get("/characters/" + sb).statusCode();
+            actor.attemptsTo(FetchResource.named("/characters/" + sb));
+            int status = actor.asksFor(statusCode());
             assertThat(status).as("GET /characters/%s", sb).isLessThan(500);
         }
     }
 
     @Test
-    @DisplayName("Páginas extremas o inválidas no rompen el listado")
+    @DisplayName("Extreme or invalid pages do not break the listing")
     void extremePagesNeverFail() {
         for (String page : List.of("-1", "0", "1", "999999", "2147483647",
                 "9223372036854775807", "abc", "1.5", "")) {
-            int status = client.get("/characters?page=" + page).statusCode();
+            actor.attemptsTo(FetchResource.named("/characters?page=" + page));
+            int status = actor.asksFor(statusCode());
             assertThat(status).as("page=%s", page).isLessThan(500);
         }
     }
 
     @Test
-    @DisplayName("Negociación de contenido: formatos no soportados no rompen la API")
+    @DisplayName("Content negotiation: unsupported formats do not break the API")
     void contentNegotiationHandled() {
         for (String accept : List.of("application/xml", "text/html",
                 "application/vnd.api+json", "text/csv", "image/png")) {
-            int status = client.getWithHeaders("/characters/1", Map.of("Accept", accept)).statusCode();
+            actor.attemptsTo(Get.resource("/characters/1").withHeaders(Map.of("Accept", accept)));
+            int status = actor.asksFor(statusCode());
             assertThat(status).as("Accept=%s", accept).isLessThan(500);
         }
 
-        client.getWithHeaders("/characters/1", Map.of("Accept", "application/json"))
-                .then().statusCode(200);
+        actor.attemptsTo(Get.resource("/characters/1").withHeaders(Map.of("Accept", "application/json")));
+        actor.should(thatTheStatusCode().isEqualTo(200));
     }
 
     @Test
-    @DisplayName("Headers malformados o extremos se toleran sin 5xx")
+    @DisplayName("Malformed or extreme headers are tolerated without 5xx")
     void malformedHeadersTolerated() {
         Map<String, String> cases = Map.of(
                 "Accept-Language", "a;b;c;d;e;;;;;;;;;;;;;;;;;;;;;;;",
@@ -83,28 +91,30 @@ class RobustnessApiTest extends BaseApiTest {
         );
 
         for (Map.Entry<String, String> entry : cases.entrySet()) {
-            int status = client.getWithHeaders("/characters/1", Map.of(entry.getKey(), entry.getValue()))
-                    .statusCode();
-            assertThat(status).as("header %s malformado", entry.getKey()).isLessThan(500);
+            actor.attemptsTo(Get.resource("/characters/1").withHeaders(Map.of(entry.getKey(), entry.getValue())));
+            int status = actor.asksFor(statusCode());
+            assertThat(status).as("malformed header %s", entry.getKey()).isLessThan(500);
         }
     }
 
     @Test
-    @DisplayName("Rutas con slashes dobles, trailing slash y encoding no rompen")
+    @DisplayName("Double slashes, trailing slash and encoding do not break")
     void unusualPathsHandled() {
         for (String path : List.of("/characters//1", "/characters/1/", "/characters/%20",
                 "/characters/%2e%2e", "/characters/1%2F2", "//characters/1", "/characters/1?page=1")) {
-            int status = client.get(path).statusCode();
+            actor.attemptsTo(FetchResource.named(path));
+            int status = actor.asksFor(statusCode());
             assertThat(status).as("path=%s", path).isLessThan(500);
         }
     }
 
     @Test
-    @DisplayName("Caracteres unicode en el path se manejan sin 5xx")
+    @DisplayName("Unicode characters in the path are handled without 5xx")
     void unicodePathsHandled() {
         for (String path : List.of("/characters/ñoño", "/characters/日本",
                 "/characters/üñíçödé", "/characters/αβγ")) {
-            int status = client.get(path).statusCode();
+            actor.attemptsTo(FetchResource.named(path));
+            int status = actor.asksFor(statusCode());
             assertThat(status).as("path=%s", path).isLessThan(500);
         }
     }

@@ -10,8 +10,8 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 
 /**
- * Cliente HTTP de bajo nivel: construye la RequestSpecification base
- * (URL, headers, timeouts y filtros transversales) usada por SimpsonsApiClient.
+ * Low-level HTTP client: builds the base RequestSpecification (URL, headers,
+ * timeouts and cross-cutting filters) used by SimpsonsApiClient.
  */
 public class RestClient {
 

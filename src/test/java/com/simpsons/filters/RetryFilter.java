@@ -11,9 +11,9 @@ import org.slf4j.LoggerFactory;
 import java.util.Set;
 
 /**
- * Reintenta peticiones ante errores transitorios (429/5xx) y fallos de conexión.
- * Combate la flakiness de APIs externas sin ocultar errores reales:
- * tras agotar los intentos, la última respuesta (o excepción) se propaga tal cual.
+ * Retries requests on transient errors (429/5xx) and connection failures.
+ * Fights the flakiness of external APIs without hiding real errors: once the
+ * attempts are exhausted, the last response (or exception) propagates as is.
  */
 public class RetryFilter implements Filter {
 
@@ -48,7 +48,7 @@ public class RetryFilter implements Filter {
                     throw e;
                 }
                 attempt++;
-                log.warn("{} {} falló por excepción: {} — reintentando ({}/{})",
+                log.warn("{} {} failed with exception: {} — retrying ({}/{})",
                         requestSpec.getMethod(), requestSpec.getURI(), e.getMessage(), attempt, maxRetries);
                 sleep(backoffMs * (long) Math.pow(2, attempt - 1));
             }
@@ -57,7 +57,7 @@ public class RetryFilter implements Filter {
 
     private void sleepAndLog(FilterableRequestSpecification requestSpec, int status, int attempt) {
         long delay = backoffMs * (long) Math.pow(2, attempt - 1);
-        log.warn("{} {} respondió {} — reintentando ({}/{}) en {} ms",
+        log.warn("{} {} answered {} — retrying ({}/{}) in {} ms",
                 requestSpec.getMethod(), requestSpec.getURI(), status, attempt, maxRetries, delay);
         sleep(delay);
     }
@@ -67,7 +67,7 @@ public class RetryFilter implements Filter {
             Thread.sleep(ms);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrumpido durante backoff de reintento", e);
+            throw new IllegalStateException("Interrupted during retry backoff", e);
         }
     }
 }

@@ -5,12 +5,12 @@ import java.io.InputStream;
 import java.util.Properties;
 
 /**
- * Gestión de configuración centralizada.
+ * Centralized configuration management.
  *
- * Precedencia de valores (de mayor a menor):
- *  1. Propiedad de sistema   (-Dapi.base.uri=...)
- *  2. Variable de entorno    (API_BASE_URI)
- *  3. Valor por defecto      (src/test/resources/config.properties)
+ * Value precedence (highest to lowest):
+ *  1. System property   (-Dapi.base.uri=...)
+ *  2. Environment variable (API_BASE_URI)
+ *  3. Default value     (src/test/resources/config.properties)
  */
 public final class ApiConfig {
 
@@ -22,7 +22,7 @@ public final class ApiConfig {
                 props.load(in);
             }
         } catch (IOException e) {
-            throw new IllegalStateException("No se pudo leer config.properties", e);
+            throw new IllegalStateException("Could not read config.properties", e);
         }
     }
 
